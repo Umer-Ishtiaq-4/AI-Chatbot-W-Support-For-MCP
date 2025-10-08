@@ -1,8 +1,9 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import GA4ConnectionCard from '@/components/GA4ConnectionCard'
 
 interface Message {
   id: string
@@ -16,8 +17,12 @@ export default function Chat() {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [userId, setUserId] = useState<string | null>(null)
+  const [ga4Connected, setGa4Connected] = useState(false)
+  const [ga4Tokens, setGa4Tokens] = useState<any>(null)
+  const [connectingGA4, setConnectingGA4] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
+  const searchParams = useSearchParams()
 
   useEffect(() => {
     const checkUser = async () => {
@@ -32,6 +37,56 @@ export default function Chat() {
     }
     checkUser()
   }, [router])
+
+  // Handle OAuth callback
+  useEffect(() => {
+    const ga4Status = searchParams.get('ga4_connected')
+    const tokensParam = searchParams.get('tokens')
+    const error = searchParams.get('error')
+
+    if (error) {
+      alert(`Error connecting to GA4: ${error}`)
+      // Clean up URL
+      router.replace('/chat')
+    } else if (ga4Status === 'true' && tokensParam) {
+      try {
+        const tokens = JSON.parse(Buffer.from(tokensParam, 'base64').toString())
+        setGa4Tokens(tokens)
+        setGa4Connected(true)
+        
+        // Store tokens in localStorage (in production, use secure storage)
+        localStorage.setItem('ga4_tokens', JSON.stringify(tokens))
+        
+        // Add success message to chat
+        const successMessage: Message = {
+          id: `ga4-connected-${Date.now()}`,
+          role: 'assistant',
+          content: '✅ Successfully connected to Google Analytics 4! You can now ask questions about your analytics data.',
+          created_at: new Date().toISOString()
+        }
+        setMessages(prev => [...prev, successMessage])
+        
+        // Clean up URL
+        router.replace('/chat')
+      } catch (err) {
+        console.error('Error processing GA4 tokens:', err)
+      }
+    }
+  }, [searchParams, router])
+
+  // Check for existing GA4 connection on mount
+  useEffect(() => {
+    const storedTokens = localStorage.getItem('ga4_tokens')
+    if (storedTokens) {
+      try {
+        const tokens = JSON.parse(storedTokens)
+        setGa4Tokens(tokens)
+        setGa4Connected(true)
+      } catch (err) {
+        console.error('Error loading GA4 tokens:', err)
+      }
+    }
+  }, [])
 
   const loadMessages = async (uid: string) => {
     const { data, error } = await supabase
@@ -81,7 +136,12 @@ export default function Chat() {
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: userMessage, userId }),
+        body: JSON.stringify({ 
+          message: userMessage, 
+          userId,
+          ga4Connected,
+          ga4Tokens: ga4Connected ? ga4Tokens : null
+        }),
       })
 
       const data = await response.json()
@@ -130,6 +190,48 @@ export default function Chat() {
     }
   }
 
+  const connectGA4 = async () => {
+    try {
+      setConnectingGA4(true)
+      
+      // Get current session
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        alert('Please log in first')
+        return
+      }
+
+      // Get OAuth URL from our API
+      const response = await fetch('/api/auth/google', {
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`
+        }
+      })
+
+      const data = await response.json()
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to get auth URL')
+      }
+
+      // Open OAuth popup
+      const width = 500
+      const height = 600
+      const left = window.screenX + (window.outerWidth - width) / 2
+      const top = window.screenY + (window.outerHeight - height) / 2
+      
+      window.open(
+        data.authUrl,
+        'ga4_oauth',
+        `width=${width},height=${height},left=${left},top=${top},toolbar=no,menubar=no`
+      )
+    } catch (error: any) {
+      alert('Error connecting to GA4: ' + error.message)
+    } finally {
+      setConnectingGA4(false)
+    }
+  }
+
   return (
     <div className="flex flex-col h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50">
       {/* Centered Container - 80% width on desktop */}
@@ -156,6 +258,15 @@ export default function Chat() {
               Logout
             </button>
           </div>
+        </div>
+
+        {/* GA4 Connection Card */}
+        <div className="px-8 pt-6">
+          <GA4ConnectionCard 
+            onConnect={connectGA4}
+            isConnected={ga4Connected}
+            isLoading={connectingGA4}
+          />
         </div>
 
         {/* Messages */}
