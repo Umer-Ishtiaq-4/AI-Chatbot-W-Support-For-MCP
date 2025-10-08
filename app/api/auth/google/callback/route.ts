@@ -1,7 +1,7 @@
 // Google OAuth Callback Route
 import { NextRequest, NextResponse } from 'next/server';
 import { getGoogleTokens } from '@/lib/auth/google';
-import { supabase } from '@/lib/supabase';
+import { CredentialManager } from '@/lib/mcp/credential-manager';
 
 export async function GET(request: NextRequest) {
   try {
@@ -30,11 +30,20 @@ export async function GET(request: NextRequest) {
     // Exchange code for tokens
     const tokens = await getGoogleTokens(code);
 
-    // Store tokens in database (you might want to create a separate table for this)
-    // For now, we'll store in localStorage via a redirect with tokens
+    console.log('OAuth tokens received, creating persistent credentials...');
+
+    // Create persistent credentials file and store in database
+    await CredentialManager.createCredentials(
+      userId,
+      'google-analytics',
+      tokens
+    );
+
+    console.log('Credentials stored successfully for user:', userId);
+
+    // Redirect to chat with success
     const redirectUrl = new URL('/chat', request.url);
     redirectUrl.searchParams.set('ga4_connected', 'true');
-    redirectUrl.searchParams.set('tokens', Buffer.from(JSON.stringify(tokens)).toString('base64'));
 
     return NextResponse.redirect(redirectUrl);
   } catch (error: any) {

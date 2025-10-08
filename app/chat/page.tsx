@@ -41,50 +41,35 @@ export default function Chat() {
   // Handle OAuth callback
   useEffect(() => {
     const ga4Status = searchParams.get('ga4_connected')
-    const tokensParam = searchParams.get('tokens')
     const error = searchParams.get('error')
 
     if (error) {
       alert(`Error connecting to GA4: ${error}`)
+      router.replace('/chat')
+    } else if (ga4Status === 'true') {
+      // Connection successful - credentials are now stored server-side
+      setGa4Connected(true)
+      localStorage.setItem('ga4_connected', 'true')
+      
+      // Add success message to chat
+      const successMessage: Message = {
+        id: `ga4-connected-${Date.now()}`,
+        role: 'assistant',
+        content: '✅ Successfully connected to Google Analytics 4! You can now ask questions about your analytics data.',
+        created_at: new Date().toISOString()
+      }
+      setMessages(prev => [...prev, successMessage])
+      
       // Clean up URL
       router.replace('/chat')
-    } else if (ga4Status === 'true' && tokensParam) {
-      try {
-        const tokens = JSON.parse(Buffer.from(tokensParam, 'base64').toString())
-        setGa4Tokens(tokens)
-        setGa4Connected(true)
-        
-        // Store tokens in localStorage (in production, use secure storage)
-        localStorage.setItem('ga4_tokens', JSON.stringify(tokens))
-        
-        // Add success message to chat
-        const successMessage: Message = {
-          id: `ga4-connected-${Date.now()}`,
-          role: 'assistant',
-          content: '✅ Successfully connected to Google Analytics 4! You can now ask questions about your analytics data.',
-          created_at: new Date().toISOString()
-        }
-        setMessages(prev => [...prev, successMessage])
-        
-        // Clean up URL
-        router.replace('/chat')
-      } catch (err) {
-        console.error('Error processing GA4 tokens:', err)
-      }
     }
   }, [searchParams, router])
 
   // Check for existing GA4 connection on mount
   useEffect(() => {
-    const storedTokens = localStorage.getItem('ga4_tokens')
-    if (storedTokens) {
-      try {
-        const tokens = JSON.parse(storedTokens)
-        setGa4Tokens(tokens)
-        setGa4Connected(true)
-      } catch (err) {
-        console.error('Error loading GA4 tokens:', err)
-      }
+    const isConnected = localStorage.getItem('ga4_connected') === 'true'
+    if (isConnected) {
+      setGa4Connected(true)
     }
   }, [])
 
@@ -139,8 +124,7 @@ export default function Chat() {
         body: JSON.stringify({ 
           message: userMessage, 
           userId,
-          ga4Connected,
-          ga4Tokens: ga4Connected ? ga4Tokens : null
+          ga4Connected
         }),
       })
 

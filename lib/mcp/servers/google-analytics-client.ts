@@ -15,23 +15,12 @@ export class GoogleAnalyticsMCPClient implements MCPServerInterface {
     }
 
     try {
-      const fs = require('fs');
-      const os = require('os');
-      const path = require('path');
+      // Use the persistent credentials file path
+      const credentialsPath = credentials.credentials_path;
 
-      // Create a temporary credentials file for the Python server
-      const tempDir = os.tmpdir();
-      const credentialsPath = path.join(tempDir, `ga4-mcp-creds-${Date.now()}.json`);
-
-      // Write OAuth credentials in the format Google expects
-      const credentialsData = {
-        type: 'authorized_user',
-        client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
-        client_secret: process.env.GOOGLE_CLIENT_SECRET,
-        refresh_token: credentials.refresh_token
-      };
-
-      fs.writeFileSync(credentialsPath, JSON.stringify(credentialsData, null, 2));
+      if (!credentialsPath) {
+        throw new Error('Credentials path is required');
+      }
 
       // Create environment with Google credentials
       const env = {
@@ -40,7 +29,7 @@ export class GoogleAnalyticsMCPClient implements MCPServerInterface {
         ...process.env
       };
 
-      console.log('Starting GA4 MCP server with credentials at:', credentialsPath);
+      console.log('Starting GA4 MCP server with persistent credentials:', credentialsPath);
 
       // Connect to the Python MCP server via stdio
       this.transport = new StdioClientTransport({
@@ -63,9 +52,6 @@ export class GoogleAnalyticsMCPClient implements MCPServerInterface {
 
       // Fetch and cache tools immediately after connection
       await this.refreshTools();
-
-      // Clean up temp file after a delay (it needs to exist while server is running)
-      // Don't delete immediately - server needs it
     } catch (error: any) {
       this.isConnected = false;
       console.error('Failed to connect to GA MCP server:', error);

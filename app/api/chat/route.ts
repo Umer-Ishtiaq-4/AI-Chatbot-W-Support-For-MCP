@@ -1,20 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import OpenAI from 'openai'
-import { mcpClientManager } from '@/lib/mcp/client'
-import { googleAnalyticsMCPClient } from '@/lib/mcp/servers/google-analytics-client'
-import '@/lib/mcp/registry' // Initialize MCP servers
+import { mcpConnectionPool } from '@/lib/mcp/connection-pool'
+import { CredentialManager } from '@/lib/mcp/credential-manager'
+import { createClient } from '@supabase/supabase-js'
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 })
 
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+
 export async function POST(request: NextRequest) {
   try {
-    console.log('request', request.json())
-    const { message, ga4Connected, ga4Tokens } = await request.json()
-    console.log('ga4Connected', ga4Connected)
-    console.log('ga4Tokens', ga4Tokens)
-    console.log('message', message)
+    const { message, userId, ga4Connected } = await request.json()
+    console.log('Chat request - User:', userId, 'GA4 Connected:', ga4Connected)
 
     if (!message) {
       return NextResponse.json(
@@ -23,140 +23,191 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    if (!userId) {
+      return NextResponse.json(
+        { error: 'User ID is required' },
+        { status: 400 }
+      )
+    }
+
+    // Load recent conversation history (last 10 messages)
+    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    });
+
+    const { data: recentMessages } = await supabase
+      .from('messages')
+      .select('role, content')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    // Reverse to get chronological order (oldest to newest)
+    const conversationHistory = (recentMessages || []).reverse();
+
     // Set up MCP connection if GA4 is connected
     let ga4Tools: any[] = [];
-    if (ga4Connected && ga4Tokens) {
+    let mcpClient = null;
+    
+    if (ga4Connected) {
       try {
-        // Connect to GA4 MCP server if not already connected
-        if (!mcpClientManager.isServerConnected('google-analytics')) {
-          await googleAnalyticsMCPClient.connect(ga4Tokens);
-          await mcpClientManager.connectServer('google-analytics', ga4Tokens);
-        }
+        // Check if credentials exist for this user
+        const credentials = await CredentialManager.getCredentials(userId, 'google-analytics');
         
-        // Get available GA4 tools dynamically from the Python MCP server
-        ga4Tools = await googleAnalyticsMCPClient.listTools();
-        console.log('Dynamically loaded GA4 tools:', ga4Tools);
+        if (credentials) {
+          // Get or create connection from the pool (reuses existing connection)
+          mcpClient = await mcpConnectionPool.getConnection(userId, 'google-analytics');
+          
+          // Get available GA4 tools dynamically from the Python MCP server
+          ga4Tools = await mcpClient.listTools();
+          console.log('Dynamically loaded GA4 tools:', ga4Tools.map(t => t.name));
+        } else {
+          console.log('No GA4 credentials found for user:', userId);
+        }
       } catch (error) {
         console.error('Error connecting to GA4 MCP:', error);
       }
     }
 
-    console.log('ga4Tools keys:', Object.keys(ga4Tools), 'Data type:', Array.isArray(ga4Tools) ? 'Array' : typeof ga4Tools);
-    
     // Create system message with GA4 context
     let systemContent = 'You are a helpful assistant.';
     if (ga4Tools.length > 0) {
-      systemContent += `\n\nYou have access to Google Analytics 4 data. Available tools:\n`;
-      ga4Tools.forEach(tool => {
-        systemContent += `- ${tool.name}: ${tool.description}\n`;
-      });
-      systemContent += `\nWhen the user asks about their analytics data, use these tools to fetch real data. Always provide specific insights based on the actual data retrieved.`;
+      systemContent += `\n\nYou have access to Google Analytics 4 data through specialized tools. Use them to answer questions about analytics data with specific, accurate information.`;
     }
 
-    // Check if the message is asking about analytics
-    const lower = message.toLowerCase();
-    const isAnalyticsQuery = ga4Connected && 
-      (lower.includes('analytics') || 
-       lower.includes('ga4') || 
-       lower.includes('traffic') || 
-       lower.includes('users') || 
-       lower.includes('sessions') ||
-       lower.includes('pageviews') ||
-       lower.includes('account') ||
-       lower.includes('propert') || // catches "property" and "properties"
-       lower.includes('list') ||
-       lower.includes('show'));
+    // Build messages array with conversation history
+    const messages: any[] = [
+      {
+        role: 'system',
+        content: systemContent,
+      },
+      // Add conversation history for context
+      ...conversationHistory.map(msg => ({
+        role: msg.role,
+        content: msg.content
+      })),
+      // Add current user message
+      {
+        role: 'user',
+        content: message,
+      },
+    ];
 
-    // If it's an analytics query and we have GA4 connected, create a function calling completion
-    if (isAnalyticsQuery && ga4Tools.length > 0) {
+    // Agent loop: Keep calling tools until we have a final answer
+    const MAX_ITERATIONS = 5; // Prevent infinite loops
+    let iteration = 0;
+    let finalResponse = '';
+
+    if (ga4Tools.length > 0) {
+      // Prepare functions for OpenAI
       const functions = ga4Tools.map(tool => ({
         name: tool.name,
         description: tool.description,
         parameters: tool.inputSchema
       }));
 
-      const completion = await openai.chat.completions.create({
-        model: 'gpt-4o',
-        messages: [
-          {
-            role: 'system',
-            content: systemContent,
-          },
-          {
-            role: 'user',
-            content: message,
-          },
-        ],
-        functions,
-        function_call: 'auto',
-      });
+      while (iteration < MAX_ITERATIONS) {
+        iteration++;
+        console.log(`\n=== Agent Iteration ${iteration} ===`);
 
-      let response = completion.choices[0]?.message?.content || '';
+        const completion = await openai.chat.completions.create({
+          model: 'gpt-4o',
+          messages: messages,
+          functions,
+          function_call: 'auto',
+        });
 
-      // Handle function calls
-      if (completion.choices[0]?.message?.function_call) {
-        const functionCall = completion.choices[0].message.function_call;
+        const choice = completion.choices[0];
+        const assistantMessage = choice.message;
+
+        // If no function call, we have the final answer
+        if (!assistantMessage.function_call) {
+          finalResponse = assistantMessage.content || 'No response';
+          console.log('Final answer received (no more tool calls)');
+          break;
+        }
+
+        // LLM wants to call a function
+        const functionCall = assistantMessage.function_call;
         const functionName = functionCall.name;
         const functionArgs = JSON.parse(functionCall.arguments || '{}');
 
+        console.log(`Tool called: ${functionName}`);
+        console.log(`Arguments:`, functionArgs);
+
+        // Add assistant's function call to messages
+        messages.push({
+          role: 'assistant',
+          content: null,
+          function_call: functionCall,
+        });
+
         try {
-          // Call the MCP tool on the Python server
-          const toolResult = await googleAnalyticsMCPClient.callTool(functionName, functionArgs);
-          console.log('MCP Tool Result:', toolResult);
-          
-          // Get final response with tool result
-          const finalCompletion = await openai.chat.completions.create({
-            model: 'gpt-4o',
-            messages: [
-              {
-                role: 'system',
-                content: systemContent,
-              },
-              {
-                role: 'user',
-                content: message,
-              },
-              {
-                role: 'assistant',
-                content: null,
-                function_call: functionCall,
-              },
-              {
-                role: 'function',
-                name: functionName,
-                content: JSON.stringify(toolResult),
-              },
-            ],
+          // Execute the tool via MCP
+          if (!mcpClient) {
+            throw new Error('MCP client not available');
+          }
+
+          const toolResult = await mcpClient.callTool(functionName, functionArgs);
+          console.log(`Tool result received:`, JSON.stringify(toolResult).substring(0, 200) + '...');
+
+          // Add function result to messages
+          messages.push({
+            role: 'function',
+            name: functionName,
+            content: JSON.stringify(toolResult),
           });
 
-          response = finalCompletion.choices[0]?.message?.content || 'No response';
         } catch (error: any) {
-          console.error('Error calling GA4 tool:', error);
-          response = `I encountered an error accessing your Google Analytics data: ${error.message}. Please make sure you've provided the correct property ID and have the necessary permissions.`;
+          console.error(`Error calling tool ${functionName}:`, error);
+          
+          // Add error message to conversation
+          messages.push({
+            role: 'function',
+            name: functionName,
+            content: JSON.stringify({
+              error: error.message,
+              message: 'Failed to execute tool. Please try a different approach.'
+            }),
+          });
         }
+
+        // Continue loop - LLM will decide next action based on tool results
       }
 
-      return NextResponse.json({ response });
+      // If we hit max iterations without a final answer
+      if (iteration >= MAX_ITERATIONS && !finalResponse) {
+        console.warn('Max iterations reached, forcing final response');
+        
+        // Ask LLM to provide final answer with what it has
+        messages.push({
+          role: 'system',
+          content: 'Please provide a final answer based on the information gathered so far.'
+        });
+
+        const finalCompletion = await openai.chat.completions.create({
+          model: 'gpt-4o',
+          messages: messages,
+        });
+
+        finalResponse = finalCompletion.choices[0]?.message?.content || 'Unable to complete the request.';
+      }
+
+      return NextResponse.json({ response: finalResponse });
     }
 
-    // Regular completion without function calling
+    // Regular completion without function calling (no GA4 tools available)
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o',
-      messages: [
-        {
-          role: 'system',
-          content: systemContent,
-        },
-        {
-          role: 'user',
-          content: message,
-        },
-      ],
+      messages: messages,
     })
 
-    const response = completion.choices[0]?.message?.content || 'No response'
+    finalResponse = completion.choices[0]?.message?.content || 'No response'
 
-    return NextResponse.json({ response })
+    return NextResponse.json({ response: finalResponse })
   } catch (error: any) {
     console.error('Error:', error)
     return NextResponse.json(

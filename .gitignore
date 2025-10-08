@@ -35,3 +35,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# MCP credentials (contains OAuth tokens and sensitive data)
+/mcp-credentials/
+mcp-credentials/**
+
