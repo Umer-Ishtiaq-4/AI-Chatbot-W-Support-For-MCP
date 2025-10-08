@@ -1,9 +1,9 @@
-// Google Analytics MCP Client - Connects to the official Python MCP server
+// Google Search Console MCP Client - Connects to the GSC MCP server
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { MCPServerInterface, MCPTool, MCPResource } from '../types';
 
-export class GoogleAnalyticsMCPClient implements MCPServerInterface {
+export class GoogleSearchConsoleMCPClient implements MCPServerInterface {
   private client: Client | null = null;
   private transport: StdioClientTransport | null = null;
   private isConnected: boolean = false;
@@ -25,22 +25,20 @@ export class GoogleAnalyticsMCPClient implements MCPServerInterface {
       // Create environment with Google credentials
       const env = {
         GOOGLE_APPLICATION_CREDENTIALS: credentialsPath,
-        GOOGLE_PROJECT_ID: process.env.GOOGLE_PROJECT_ID || '',
         ...process.env
       };
 
-      console.log('Starting GA4 MCP server with persistent credentials:', credentialsPath);
+      console.log('Starting GSC MCP server with persistent credentials:', credentialsPath);
 
-      // Connect to the Python MCP server via stdio
-      // Use the installed executable directly to avoid Windows issues
+      // Connect to the GSC MCP server via stdio
       this.transport = new StdioClientTransport({
-        command: 'analytics-mcp',
-        args: [],
+        command: 'npx',
+        args: ['-y', 'mcp-server-gsc'],
         env
       });
 
       this.client = new Client({
-        name: 'ga4-chat-client',
+        name: 'gsc-chat-client',
         version: '1.0.0'
       }, {
         capabilities: {}
@@ -49,14 +47,14 @@ export class GoogleAnalyticsMCPClient implements MCPServerInterface {
       await this.client.connect(this.transport);
       this.isConnected = true;
 
-      console.log('Successfully connected to GA4 MCP server');
+      console.log('Successfully connected to GSC MCP server');
 
       // Fetch and cache tools immediately after connection
       await this.refreshTools();
     } catch (error: any) {
       this.isConnected = false;
-      console.error('Failed to connect to GA MCP server:', error);
-      throw new Error(`Failed to connect to Google Analytics MCP server: ${error.message}`);
+      console.error('Failed to connect to GSC MCP server:', error);
+      throw new Error(`Failed to connect to Google Search Console MCP server: ${error.message}`);
     }
   }
 
@@ -81,7 +79,7 @@ export class GoogleAnalyticsMCPClient implements MCPServerInterface {
 
   async listTools(): Promise<MCPTool[]> {
     if (!this.isConnected || !this.client) {
-      throw new Error('Not connected to Google Analytics MCP server');
+      throw new Error('Not connected to Google Search Console MCP server');
     }
 
     // Return cached tools if available, otherwise refresh
@@ -94,7 +92,7 @@ export class GoogleAnalyticsMCPClient implements MCPServerInterface {
 
   async listResources(): Promise<MCPResource[]> {
     if (!this.isConnected || !this.client) {
-      throw new Error('Not connected to Google Analytics MCP server');
+      throw new Error('Not connected to Google Search Console MCP server');
     }
 
     const result = await this.client.listResources();
@@ -103,7 +101,7 @@ export class GoogleAnalyticsMCPClient implements MCPServerInterface {
 
   async callTool(name: string, args: any): Promise<any> {
     if (!this.isConnected || !this.client) {
-      throw new Error('Not connected to Google Analytics MCP server');
+      throw new Error('Not connected to Google Search Console MCP server');
     }
 
     const result = await this.client.callTool({
@@ -116,7 +114,7 @@ export class GoogleAnalyticsMCPClient implements MCPServerInterface {
 
   async readResource(uri: string): Promise<any> {
     if (!this.isConnected || !this.client) {
-      throw new Error('Not connected to Google Analytics MCP server');
+      throw new Error('Not connected to Google Search Console MCP server');
     }
 
     const result = await this.client.readResource({ uri });
@@ -124,5 +122,5 @@ export class GoogleAnalyticsMCPClient implements MCPServerInterface {
   }
 }
 
-export const googleAnalyticsMCPClient = new GoogleAnalyticsMCPClient();
+export const googleSearchConsoleMCPClient = new GoogleSearchConsoleMCPClient();
 

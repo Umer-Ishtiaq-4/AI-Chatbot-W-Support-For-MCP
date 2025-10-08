@@ -18,13 +18,18 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
     }
 
-    // Generate state parameter with user ID
+    // Get service parameter (ga4, gsc, or all)
+    const searchParams = request.nextUrl.searchParams;
+    const service = searchParams.get('service') as 'ga4' | 'gsc' | 'all' || 'all';
+
+    // Generate state parameter with user ID and service
     const state = Buffer.from(JSON.stringify({
       userId: user.id,
+      service: service,
       timestamp: Date.now()
     })).toString('base64');
 
-    const authUrl = getGoogleAuthUrl(state);
+    const authUrl = getGoogleAuthUrl(state, service);
 
     return NextResponse.json({ authUrl });
   } catch (error: any) {

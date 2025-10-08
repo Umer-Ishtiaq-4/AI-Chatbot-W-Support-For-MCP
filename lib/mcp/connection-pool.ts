@@ -1,9 +1,11 @@
 // MCP Connection Pool - Maintains persistent connections to MCP servers
 import { GoogleAnalyticsMCPClient } from './servers/google-analytics-client';
+import { GoogleSearchConsoleMCPClient } from './servers/google-search-console-client';
 import { CredentialManager } from './credential-manager';
+import { MCPServerInterface } from './types';
 
 interface ConnectionEntry {
-  client: GoogleAnalyticsMCPClient;
+  client: MCPServerInterface; // Changed to support multiple client types
   userId: string;
   serverName: string;
   lastUsed: Date;
@@ -43,7 +45,7 @@ export class MCPConnectionPool {
   async getConnection(
     userId: string,
     serverName: string = 'google-analytics'
-  ): Promise<GoogleAnalyticsMCPClient> {
+  ): Promise<MCPServerInterface> {
     const key = this.getConnectionKey(userId, serverName);
     const existing = this.connections.get(key);
 
@@ -59,7 +61,16 @@ export class MCPConnectionPool {
       throw new Error(`No credentials found for user ${userId} and server ${serverName}`);
     }
 
-    const client = new GoogleAnalyticsMCPClient();
+    // Create the appropriate client based on server name
+    let client: MCPServerInterface;
+    
+    if (serverName === 'google-analytics') {
+      client = new GoogleAnalyticsMCPClient();
+    } else if (serverName === 'google-search-console') {
+      client = new GoogleSearchConsoleMCPClient();
+    } else {
+      throw new Error(`Unknown server name: ${serverName}`);
+    }
     
     try {
       // Pass the persistent credentials path
@@ -78,7 +89,7 @@ export class MCPConnectionPool {
       };
 
       this.connections.set(key, entry);
-      console.log(`Created new MCP connection for user ${userId}`);
+      console.log(`Created new MCP connection for user ${userId}, server: ${serverName}`);
       
       return client;
     } catch (error: any) {

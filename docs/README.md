@@ -6,13 +6,20 @@ Welcome to the comprehensive documentation for the Next.js AI Chatbot with Googl
 
 ### Core Architecture
 
-1. **[GA4 MCP Architecture](../GA4-MCP-ARCHITECTURE.md)**
+1. **[Multi-Service Architecture](./MULTI-SERVICE-ARCHITECTURE.md)** ⭐ **NEW**
+   - **Support for multiple Google services** (GA4 + GSC)
+   - Service-independent connection management
+   - Multi-service query handling
+   - Tool routing and naming conventions
+   - **Essential for understanding the new multi-service capabilities**
+
+2. **[GA4 MCP Architecture](../GA4-MCP-ARCHITECTURE.md)**
    - How the chatbot integrates with the official Google Analytics MCP server
    - Dynamic tool loading and execution
    - Model Context Protocol overview
    - **Start here** to understand the overall system design
 
-2. **[MCP Connection Management](./MCP-CONNECTION-MANAGEMENT.md)** ⭐
+3. **[MCP Connection Management](./MCP-CONNECTION-MANAGEMENT.md)** ⭐
    - **Detailed explanation of the connection pooling system**
    - Credential Manager architecture
    - Connection Pool lifecycle
@@ -20,7 +27,7 @@ Welcome to the comprehensive documentation for the Next.js AI Chatbot with Googl
    - Monitoring and debugging
    - **Essential reading** for understanding how connections are managed
 
-3. **[Optimization Summary](./OPTIMIZATION-SUMMARY.md)** ⭐
+4. **[Optimization Summary](./OPTIMIZATION-SUMMARY.md)** ⭐
    - **Before/after comparison** of the optimization
    - Performance metrics (40-60x improvement!)
    - Architecture changes explained
@@ -29,34 +36,42 @@ Welcome to the comprehensive documentation for the Next.js AI Chatbot with Googl
 
 ### Implementation Details
 
-4. **[Agent Loop Implementation](./AGENT-LOOP-IMPLEMENTATION.md)** ⭐
+5. **[Agent Loop Implementation](./AGENT-LOOP-IMPLEMENTATION.md)** ⭐
    - **Multi-step tool calling** (agent pattern)
    - **Conversation history** (last 10 messages)
    - How the agent decides when to stop
    - Example scenarios and flow diagrams
    - **Essential for understanding chat behavior**
 
-5. **[OAuth Flow](./OAUTH-FLOW.md)**
+6. **[OAuth Flow](./OAUTH-FLOW.md)**
    - Complete Google OAuth 2.0 flow documentation
+   - Service-specific OAuth scopes
    - Step-by-step authorization process
    - Token exchange and storage
    - Security considerations
    - Troubleshooting guide
 
-6. **[Database Schema](./DATABASE-SCHEMA.md)**
+7. **[Database Schema](./DATABASE-SCHEMA.md)**
    - Complete schema documentation
    - Table structures and relationships
+   - Multi-service support via server_name column
    - Row Level Security policies
    - Queries and analytics
    - Backup and recovery procedures
 
 ### Setup Guides
 
-6. **[GA4 MCP Setup Guide](../setup-ga4-mcp.md)**
+8. **[GA4 MCP Setup Guide](../setup-ga4-mcp.md)**
    - Installing the Python MCP server
    - Google Cloud configuration
    - Credentials setup
    - Testing and verification
+
+9. **GSC MCP Setup Guide** (Coming Soon)
+   - Installing the Node.js GSC MCP server
+   - Service account configuration
+   - Search Console access setup
+   - Testing search analytics queries
 
 ## 🚀 Quick Start
 
@@ -64,10 +79,11 @@ Welcome to the comprehensive documentation for the Next.js AI Chatbot with Googl
 
 Read these in order:
 
-1. [GA4 MCP Architecture](../GA4-MCP-ARCHITECTURE.md) - Understand the system
-2. [Optimization Summary](./OPTIMIZATION-SUMMARY.md) - Learn about the architecture
-3. [OAuth Flow](./OAUTH-FLOW.md) - Understand authentication
-4. [Database Schema](./DATABASE-SCHEMA.md) - Understand data storage
+1. [Multi-Service Architecture](./MULTI-SERVICE-ARCHITECTURE.md) - **NEW** Understand multi-service support
+2. [GA4 MCP Architecture](../GA4-MCP-ARCHITECTURE.md) - Understand the system
+3. [Optimization Summary](./OPTIMIZATION-SUMMARY.md) - Learn about the architecture
+4. [OAuth Flow](./OAUTH-FLOW.md) - Understand authentication
+5. [Database Schema](./DATABASE-SCHEMA.md) - Understand data storage
 
 ### For System Administrators
 
@@ -88,65 +104,56 @@ Check these:
 ## 📊 Architecture Overview
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                         User Browser                         │
-│  ┌─────────────┐  ┌──────────────┐  ┌──────────────────┐   │
-│  │  Chat UI    │  │  OAuth Popup │  │  GA4 Connection  │   │
-│  └──────┬──────┘  └──────┬───────┘  └────────┬─────────┘   │
-└─────────┼─────────────────┼──────────────────┼──────────────┘
-          │                 │                  │
-          │                 │                  │
-┌─────────▼─────────────────▼──────────────────▼──────────────┐
-│                    Next.js API Routes                        │
-│  ┌─────────────┐  ┌──────────────┐  ┌──────────────────┐   │
-│  │ /api/chat   │  │ /api/auth/   │  │  Chat Logic +    │   │
-│  │             │  │  google      │  │  OpenAI GPT-4o   │   │
-│  └──────┬──────┘  └──────┬───────┘  └──────────────────┘   │
-└─────────┼─────────────────┼─────────────────────────────────┘
-          │                 │
-          │                 │
-┌─────────▼─────────────────▼─────────────────────────────────┐
-│              MCP Connection Pool & Managers                  │
-│  ┌──────────────────┐  ┌───────────────────────────┐        │
-│  │ Connection Pool  │  │  Credential Manager       │        │
-│  │ - Reuse MCP      │  │  - Persistent storage     │        │
-│  │   connections    │  │  - Token management       │        │
-│  │ - Auto cleanup   │  │  - File + DB              │        │
-│  └────────┬─────────┘  └─────────┬─────────────────┘        │
-└───────────┼──────────────────────┼──────────────────────────┘
-            │                      │
-            │                      │
-┌───────────▼──────────────────────▼──────────────────────────┐
-│              Google Analytics MCP Client                     │
-│  ┌──────────────────────────────────────────────┐           │
-│  │  - Connect to Python MCP server via stdio    │           │
-│  │  - Dynamically fetch tools                   │           │
-│  │  - Execute tool calls                        │           │
-│  └────────────────────┬─────────────────────────┘           │
-└─────────────────────────┼──────────────────────────────────┘
-                          │
-                          │ (stdio transport)
-                          │
-┌─────────────────────────▼──────────────────────────────────┐
-│           Python MCP Server (analytics-mcp)                 │
-│  ┌──────────────────────────────────────────────┐          │
-│  │  Official Google Analytics MCP Server         │          │
-│  │  - get_account_summaries                      │          │
-│  │  - get_property_details                       │          │
-│  │  - run_report                                 │          │
-│  │  - run_realtime_report                        │          │
-│  │  - get_custom_dimensions_and_metrics          │          │
-│  │  - list_google_ads_links                      │          │
-│  └────────────────────┬─────────────────────────┘          │
-└─────────────────────────┼──────────────────────────────────┘
-                          │
-                          │
-┌─────────────────────────▼──────────────────────────────────┐
-│                  Google Analytics APIs                      │
-│  ┌────────────────────┐  ┌────────────────────┐           │
-│  │ Analytics Data API │  │ Analytics Admin API │          │
-│  └────────────────────┘  └────────────────────┘           │
-└─────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│                         User Browser                             │
+│  ┌─────────────┐  ┌──────────────┐  ┌──────────┐ ┌──────────┐  │
+│  │  Chat UI    │  │  OAuth Popup │  │  GA4     │ │  GSC     │  │
+│  │             │  │              │  │  Card    │ │  Card    │  │
+│  └──────┬──────┘  └──────┬───────┘  └────┬─────┘ └────┬─────┘  │
+└─────────┼─────────────────┼──────────────┼────────────┼─────────┘
+          │                 │              │            │
+          │                 │              ▼            ▼
+          │                 │      [Connect GA4]  [Connect GSC]
+          │                 │              │            │
+┌─────────▼─────────────────▼──────────────▼────────────▼─────────┐
+│                    Next.js API Routes                            │
+│  ┌─────────────┐  ┌──────────────────────────────────┐          │
+│  │ /api/chat   │  │ /api/auth/google?service=        │          │
+│  │  (Multi-    │  │  {ga4|gsc|all}                   │          │
+│  │   Service)  │  │                                  │          │
+│  └──────┬──────┘  └──────────────┬───────────────────┘          │
+└─────────┼──────────────────────────┼──────────────────────────┘
+          │                          │
+┌─────────▼──────────────────────────▼──────────────────────────┐
+│              MCP Connection Pool & Managers                    │
+│  ┌──────────────────────────────────────────────┐             │
+│  │ Connection Pool (Multi-Service)              │             │
+│  │  - google-analytics connections              │             │
+│  │  - google-search-console connections         │             │
+│  │  - Independent lifecycle per service         │             │
+│  └──────────────────────────────────────────────┘             │
+│  ┌──────────────────────────────────────────────┐             │
+│  │ Credential Manager                           │             │
+│  │  - userId-google-analytics.json              │             │
+│  │  - userId-google-search-console.json         │             │
+│  └──────────────────────────────────────────────┘             │
+└────────────────────┬┬─────────────────────────────────────────┘
+                     ││
+            ┌────────┘└──────────┐
+            ▼                     ▼
+┌───────────────────────┐  ┌──────────────────────────┐
+│  GA4 MCP Client       │  │  GSC MCP Client          │
+│  (Python)             │  │  (Node.js)               │
+│  - analytics-mcp      │  │  - mcp-server-gsc        │
+│  - run_report         │  │  - search_analytics      │
+│  - get_properties     │  │  - quick wins detection  │
+└──────────┬────────────┘  └────────────┬─────────────┘
+           │                            │
+           ▼                            ▼
+┌──────────────────────┐  ┌──────────────────────────┐
+│  Google Analytics    │  │  Search Console API      │
+│  Data & Admin APIs   │  │                          │
+└──────────────────────┘  └──────────────────────────┘
 ```
 
 ## 🔑 Key Concepts
@@ -250,7 +257,15 @@ When contributing, please:
 
 ## 📝 Changelog
 
-### v2.0 - Connection Pool Optimization (Current)
+### v3.0 - Multi-Service Architecture (Current) **NEW**
+- ✨ **Google Search Console support** alongside GA4
+- ✨ **Multi-service query handling** in single conversations
+- ✨ Service-independent connection management
+- ✨ Tool prefixing and intelligent routing
+- ✨ Flexible OAuth with service-specific scopes
+- ✨ Generic ServiceConnectionCard component
+
+### v2.0 - Connection Pool Optimization
 - ✨ Persistent connection pooling
 - ✨ Credential Manager
 - ✨ 40-60x performance improvement
