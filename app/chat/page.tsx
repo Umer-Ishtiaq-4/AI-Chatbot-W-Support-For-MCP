@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import GA4ConnectionCard from '@/components/GA4ConnectionCard'
 import GSCConnectionCard from '@/components/GSCConnectionCard'
+import Toast, { ToastType } from '@/components/Toast'
+import ConfirmModal from '@/components/ConfirmModal'
 
 interface Message {
   id: string
@@ -23,6 +25,22 @@ export default function Chat() {
   const [connectingGA4, setConnectingGA4] = useState(false)
   const [connectingGSC, setConnectingGSC] = useState(false)
   const [showConnectionsMenu, setShowConnectionsMenu] = useState(false)
+  const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null)
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean
+    title: string
+    message: string
+    onConfirm: () => void
+    type: 'danger' | 'warning' | 'info'
+    confirmText?: string
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+    type: 'warning',
+    confirmText: 'Confirm'
+  })
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -47,32 +65,31 @@ export default function Chat() {
       // Verify the message is from our OAuth callback
       if (event.data.type === 'oauth_success') {
         const { service } = event.data
-        const successMessages: Message[] = []
         
         if (service === 'ga4' || service === 'both') {
           setGa4Connected(true)
           localStorage.setItem('ga4_connected', 'true')
-          successMessages.push({
-            id: `ga4-connected-${Date.now()}`,
-            role: 'assistant',
-            content: '✅ Successfully connected to Google Analytics 4! You can now ask questions about your analytics data.',
-            created_at: new Date().toISOString()
+          setToast({
+            message: 'Successfully connected to Google Analytics 4!',
+            type: 'success'
           })
         }
         
         if (service === 'gsc' || service === 'both') {
           setGscConnected(true)
           localStorage.setItem('gsc_connected', 'true')
-          successMessages.push({
-            id: `gsc-connected-${Date.now()}`,
-            role: 'assistant',
-            content: '✅ Successfully connected to Google Search Console! You can now ask questions about your search performance data.',
-            created_at: new Date().toISOString()
-          })
-        }
-        
-        if (successMessages.length > 0) {
-          setMessages(prev => [...prev, ...successMessages])
+          // If both services, show a combined message, otherwise show GSC message
+          if (service === 'both') {
+            setToast({
+              message: 'Successfully connected to Google Analytics 4 and Search Console!',
+              type: 'success'
+            })
+          } else {
+            setToast({
+              message: 'Successfully connected to Google Search Console!',
+              type: 'success'
+            })
+          }
         }
         
         setConnectingGA4(false)
@@ -203,18 +220,41 @@ export default function Chat() {
     router.push('/login')
   }
 
-  const clearChat = async () => {
+  const clearChat = () => {
     if (!userId) return
-    if (!confirm('Are you sure you want to clear all messages?')) return
+    
+    setConfirmModal({
+      isOpen: true,
+      title: 'Clear All Messages?',
+      message: 'Are you sure you want to delete all chat messages? This action cannot be undone.',
+      type: 'danger',
+      confirmText: 'Clear',
+      onConfirm: async () => {
+        try {
+          const { error } = await supabase
+            .from('messages')
+            .delete()
+            .eq('user_id', userId)
 
-    const { error } = await supabase
-      .from('messages')
-      .delete()
-      .eq('user_id', userId)
+          if (error) {
+            throw new Error(error.message)
+          }
 
-    if (!error) {
-      setMessages([])
-    }
+          setMessages([])
+          setToast({
+            message: 'All messages cleared successfully',
+            type: 'success'
+          })
+        } catch (error: any) {
+          setToast({
+            message: 'Error clearing messages: ' + error.message,
+            type: 'error'
+          })
+        } finally {
+          setConfirmModal(prev => ({ ...prev, isOpen: false }))
+        }
+      }
+    })
   }
 
   const connectGA4 = async () => {
@@ -224,7 +264,10 @@ export default function Chat() {
       // Get current session
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) {
-        alert('Please log in first')
+        setToast({
+          message: 'Please log in first',
+          type: 'warning'
+        })
         return
       }
 
@@ -253,7 +296,10 @@ export default function Chat() {
         `width=${width},height=${height},left=${left},top=${top},toolbar=no,menubar=no`
       )
     } catch (error: any) {
-      alert('Error connecting to GA4: ' + error.message)
+      setToast({
+        message: 'Error connecting to GA4: ' + error.message,
+        type: 'error'
+      })
     } finally {
       setConnectingGA4(false)
     }
@@ -266,7 +312,10 @@ export default function Chat() {
       // Get current session
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) {
-        alert('Please log in first')
+        setToast({
+          message: 'Please log in first',
+          type: 'warning'
+        })
         return
       }
 
@@ -295,10 +344,107 @@ export default function Chat() {
         `width=${width},height=${height},left=${left},top=${top},toolbar=no,menubar=no`
       )
     } catch (error: any) {
-      alert('Error connecting to GSC: ' + error.message)
+      setToast({
+        message: 'Error connecting to GSC: ' + error.message,
+        type: 'error'
+      })
     } finally {
       setConnectingGSC(false)
     }
+  }
+
+  const disconnectGA4 = () => {
+    if (!userId) return
+    
+    setConfirmModal({
+      isOpen: true,
+      title: 'Disconnect Google Analytics 4?',
+      message: 'Are you sure you want to disconnect Google Analytics 4? You can reconnect anytime.',
+      type: 'danger',
+      confirmText: 'Disconnect',
+      onConfirm: async () => {
+        try {
+          const response = await fetch('/api/auth/google/disconnect', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              service: 'ga4',
+              userId 
+            }),
+          })
+
+          const data = await response.json()
+
+          if (!response.ok) {
+            throw new Error(data.error || 'Failed to disconnect')
+          }
+
+          // Update state
+          setGa4Connected(false)
+          localStorage.removeItem('ga4_connected')
+
+          // Show success toast
+          setToast({
+            message: 'Google Analytics 4 disconnected successfully',
+            type: 'info'
+          })
+        } catch (error: any) {
+          setToast({
+            message: 'Error disconnecting GA4: ' + error.message,
+            type: 'error'
+          })
+        } finally {
+          setConfirmModal(prev => ({ ...prev, isOpen: false }))
+        }
+      }
+    })
+  }
+
+  const disconnectGSC = () => {
+    if (!userId) return
+    
+    setConfirmModal({
+      isOpen: true,
+      title: 'Disconnect Google Search Console?',
+      message: 'Are you sure you want to disconnect Google Search Console? You can reconnect anytime.',
+      type: 'danger',
+      confirmText: 'Disconnect',
+      onConfirm: async () => {
+        try {
+          const response = await fetch('/api/auth/google/disconnect', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              service: 'gsc',
+              userId 
+            }),
+          })
+
+          const data = await response.json()
+
+          if (!response.ok) {
+            throw new Error(data.error || 'Failed to disconnect')
+          }
+
+          // Update state
+          setGscConnected(false)
+          localStorage.removeItem('gsc_connected')
+
+          // Show success toast
+          setToast({
+            message: 'Google Search Console disconnected successfully',
+            type: 'info'
+          })
+        } catch (error: any) {
+          setToast({
+            message: 'Error disconnecting GSC: ' + error.message,
+            type: 'error'
+          })
+        } finally {
+          setConfirmModal(prev => ({ ...prev, isOpen: false }))
+        }
+      }
+    })
   }
 
   return (
@@ -370,11 +516,19 @@ export default function Chat() {
                         </div>
                       </div>
                       {ga4Connected ? (
-                        <div className="flex items-center text-green-600 text-xs font-medium">
-                          <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                          </svg>
-                          Connected
+                        <div className="flex items-center space-x-2">
+                          <div className="flex items-center text-green-600 text-xs font-medium">
+                            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                            Connected
+                          </div>
+                          <button
+                            onClick={() => { setShowConnectionsMenu(false); disconnectGA4(); }}
+                            className="px-3 py-1.5 bg-red-500 text-white text-xs font-medium rounded hover:bg-red-600 transition-all"
+                          >
+                            Disconnect
+                          </button>
                         </div>
                       ) : (
                         <button
@@ -401,11 +555,19 @@ export default function Chat() {
                         </div>
                       </div>
                       {gscConnected ? (
-                        <div className="flex items-center text-green-600 text-xs font-medium">
-                          <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                          </svg>
-                          Connected
+                        <div className="flex items-center space-x-2">
+                          <div className="flex items-center text-green-600 text-xs font-medium">
+                            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                            Connected
+                          </div>
+                          <button
+                            onClick={() => { setShowConnectionsMenu(false); disconnectGSC(); }}
+                            className="px-3 py-1.5 bg-red-500 text-white text-xs font-medium rounded hover:bg-red-600 transition-all"
+                          >
+                            Disconnect
+                          </button>
                         </div>
                       ) : (
                         <button
@@ -508,6 +670,26 @@ export default function Chat() {
           </form>
         </div>
       </div>
+
+      {/* Toast Notification */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
+
+      {/* Confirmation Modal */}
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        type={confirmModal.type}
+        confirmText={confirmModal.confirmText}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+      />
     </div>
   )
 }
