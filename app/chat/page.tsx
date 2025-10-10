@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import Toast, { ToastType } from '@/components/Toast'
 import ConfirmModal from '@/components/ConfirmModal'
+import ReactMarkdown from 'react-markdown'
 
 interface Message {
   id: string
@@ -633,7 +634,31 @@ export default function Chat() {
                       <span className="mr-1">🤖</span> AI Assistant
                     </div>
                   )}
-                  <p className="whitespace-pre-wrap break-words leading-relaxed">{message.content}</p>
+                  {message.role === 'assistant' ? (
+                    <div className="prose prose-sm max-w-none">
+                      <ReactMarkdown
+                        components={{
+                          p: ({ children }) => <p className="mb-3 leading-relaxed text-gray-800">{children}</p>,
+                          strong: ({ children }) => <strong className="font-bold text-gray-900">{children}</strong>,
+                          em: ({ children }) => <em className="italic text-gray-700">{children}</em>,
+                          ul: ({ children }) => <ul className="list-disc list-inside mb-3 space-y-1">{children}</ul>,
+                          ol: ({ children }) => <ol className="list-decimal list-inside mb-3 space-y-1">{children}</ol>,
+                          li: ({ children }) => <li className="text-gray-800 ml-2">{children}</li>,
+                          h1: ({ children }) => <h1 className="text-xl font-bold mb-3 text-gray-900">{children}</h1>,
+                          h2: ({ children }) => <h2 className="text-lg font-bold mb-2 text-gray-900">{children}</h2>,
+                          h3: ({ children }) => <h3 className="text-base font-bold mb-2 text-gray-900">{children}</h3>,
+                          code: ({ children }) => <code className="bg-gray-100 text-indigo-600 px-1.5 py-0.5 rounded text-sm font-mono">{children}</code>,
+                          pre: ({ children }) => <pre className="bg-gray-100 p-3 rounded-lg overflow-x-auto mb-3">{children}</pre>,
+                          blockquote: ({ children }) => <blockquote className="border-l-4 border-indigo-400 pl-4 italic text-gray-700 my-3">{children}</blockquote>,
+                          a: ({ href, children }) => <a href={href} className="text-indigo-600 hover:text-indigo-700 underline" target="_blank" rel="noopener noreferrer">{children}</a>,
+                        }}
+                      >
+                        {message.content}
+                      </ReactMarkdown>
+                    </div>
+                  ) : (
+                    <p className="whitespace-pre-wrap break-words leading-relaxed">{message.content}</p>
+                  )}
                 </div>
               </div>
             ))
