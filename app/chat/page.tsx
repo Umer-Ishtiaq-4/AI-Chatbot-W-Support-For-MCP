@@ -538,20 +538,12 @@ export default function Chat() {
                         </div>
                       </div>
                       {ga4Connected ? (
-                        <div className="flex items-center space-x-2">
-                          <div className="flex items-center text-green-600 text-xs font-medium">
-                            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                            </svg>
-                            Connected
-                          </div>
-                          <button
-                            onClick={() => { setShowConnectionsMenu(false); disconnectGA4(); }}
-                            className="px-3 py-1.5 bg-red-500 text-white text-xs font-medium rounded hover:bg-red-600 transition-all"
-                          >
-                            Disconnect
-                          </button>
-                        </div>
+                        <button
+                          onClick={() => { setShowConnectionsMenu(false); disconnectGA4(); }}
+                          className="px-3 py-1.5 bg-red-500 text-white text-xs font-medium rounded hover:bg-red-600 transition-all"
+                        >
+                          Disconnect
+                        </button>
                       ) : (
                         <button
                           onClick={() => { setShowConnectionsMenu(false); connectGA4(); }}
@@ -577,20 +569,12 @@ export default function Chat() {
                         </div>
                       </div>
                       {gscConnected ? (
-                        <div className="flex items-center space-x-2">
-                          <div className="flex items-center text-green-600 text-xs font-medium">
-                            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                            </svg>
-                            Connected
-                          </div>
-                          <button
-                            onClick={() => { setShowConnectionsMenu(false); disconnectGSC(); }}
-                            className="px-3 py-1.5 bg-red-500 text-white text-xs font-medium rounded hover:bg-red-600 transition-all"
-                          >
-                            Disconnect
-                          </button>
-                        </div>
+                        <button
+                          onClick={() => { setShowConnectionsMenu(false); disconnectGSC(); }}
+                          className="px-3 py-1.5 bg-red-500 text-white text-xs font-medium rounded hover:bg-red-600 transition-all"
+                        >
+                          Disconnect
+                        </button>
                       ) : (
                         <button
                           onClick={() => { setShowConnectionsMenu(false); connectGSC(); }}
