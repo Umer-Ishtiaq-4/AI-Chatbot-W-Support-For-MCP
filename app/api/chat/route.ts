@@ -13,8 +13,7 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.
 
 export async function POST(request: NextRequest) {
   try {
-    const { message, userId, ga4Connected, gscConnected } = await request.json()
-    console.log('Chat request - User:', userId, 'GA4 Connected:', ga4Connected, 'GSC Connected:', gscConnected)
+    const { message, ga4Connected, gscConnected } = await request.json()
 
     if (!message) {
       return NextResponse.json(
@@ -23,20 +22,30 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (!userId) {
-      return NextResponse.json(
-        { error: 'User ID is required' },
-        { status: 400 }
-      )
+    // Verify user authentication from session token
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Load recent conversation history (last 10 messages)
+    const token = authHeader.split(' ')[1];
     const supabase = createClient(supabaseUrl, supabaseServiceKey, {
       auth: {
         autoRefreshToken: false,
         persistSession: false
       }
     });
+
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
+    }
+
+    const userId = user.id; // Get userId from authenticated session
+    console.log('Chat request - User:', userId, 'GA4 Connected:', ga4Connected, 'GSC Connected:', gscConnected)
+
+    // Load recent conversation history (last 10 messages)
 
     const { data: recentMessages } = await supabase
       .from('messages')

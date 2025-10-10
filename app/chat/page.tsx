@@ -3,8 +3,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import GA4ConnectionCard from '@/components/GA4ConnectionCard'
-import GSCConnectionCard from '@/components/GSCConnectionCard'
 import Toast, { ToastType } from '@/components/Toast'
 import ConfirmModal from '@/components/ConfirmModal'
 
@@ -176,13 +174,21 @@ export default function Chat() {
 
       setMessages(prev => [...prev, userMsg])
 
+      // Get current session token for authentication
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        throw new Error('Session expired, please login again')
+      }
+
       // Get AI response
       const response = await fetch('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
         body: JSON.stringify({ 
-          message: userMessage, 
-          userId,
+          message: userMessage,
           ga4Connected,
           gscConnected
         }),
@@ -364,12 +370,20 @@ export default function Chat() {
       confirmText: 'Disconnect',
       onConfirm: async () => {
         try {
+          // Get current session token for authentication
+          const { data: { session } } = await supabase.auth.getSession()
+          if (!session) {
+            throw new Error('Session expired, please login again')
+          }
+
           const response = await fetch('/api/auth/google/disconnect', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session.access_token}`
+            },
             body: JSON.stringify({ 
-              service: 'ga4',
-              userId 
+              service: 'ga4'
             }),
           })
 
@@ -411,12 +425,20 @@ export default function Chat() {
       confirmText: 'Disconnect',
       onConfirm: async () => {
         try {
+          // Get current session token for authentication
+          const { data: { session } } = await supabase.auth.getSession()
+          if (!session) {
+            throw new Error('Session expired, please login again')
+          }
+
           const response = await fetch('/api/auth/google/disconnect', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session.access_token}`
+            },
             body: JSON.stringify({ 
-              service: 'gsc',
-              userId 
+              service: 'gsc'
             }),
           })
 

@@ -8,11 +8,11 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.
 
 export async function POST(request: NextRequest) {
   try {
-    const { service, userId } = await request.json();
+    const { service } = await request.json();
 
-    if (!service || !userId) {
+    if (!service) {
       return NextResponse.json(
-        { error: 'Missing service or userId' },
+        { error: 'Missing service parameter' },
         { status: 400 }
       );
     }
@@ -24,6 +24,28 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Verify user authentication from session token
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const token = authHeader.split(' ')[1];
+    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    });
+
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
+    }
+
+    const userId = user.id; // Get userId from authenticated session
 
     // Determine which services to disconnect
     const servicesToDisconnect = service === 'all' 

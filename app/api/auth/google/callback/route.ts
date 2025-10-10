@@ -41,7 +41,11 @@ export async function GET(request: NextRequest) {
       : ['google-search-console'];
 
     for (const serverName of servicesToConnect) {
-      await CredentialManager.createCredentials(userId, serverName, tokens);
+      await CredentialManager.createCredentials(userId, serverName, {
+        access_token: tokens.access_token || undefined,
+        refresh_token: tokens.refresh_token!,
+        expiry_date: tokens.expiry_date || undefined
+      });
       console.log(`Credentials stored successfully for ${serverName}, user:`, userId);
     }
 
