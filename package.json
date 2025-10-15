@@ -2,11 +2,16 @@
   "name": "nextjs-chatbot",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
-    "lint": "next lint"
+    "start": "next start -p ${PORT:-3000}",
+    "lint": "next lint",
+    "postinstall": "command -v pipx >/dev/null 2>&1 && pipx install analytics-mcp || echo 'pipx not found, skipping analytics-mcp installation'"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.19.1",
