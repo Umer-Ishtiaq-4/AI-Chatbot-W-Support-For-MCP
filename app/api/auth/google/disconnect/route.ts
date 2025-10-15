@@ -1,6 +1,7 @@
 // Google Service Disconnect Route
 import { NextRequest, NextResponse } from 'next/server';
 import { CredentialManager } from '@/lib/mcp/credential-manager';
+import { mcpConnectionPool } from '@/lib/mcp/connection-pool';
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -54,11 +55,16 @@ export async function POST(request: NextRequest) {
       ? ['google-analytics']
       : ['google-search-console'];
 
-    // Delete credentials for each service
+    // Delete credentials and close active connections for each service
     for (const serverName of servicesToDisconnect) {
       try {
+        // Close active connection in pool first
+        await mcpConnectionPool.closeConnection(userId, serverName);
+        console.log(`Closed active connection for ${serverName}, user:`, userId);
+        
+        // Then delete credentials
         await CredentialManager.deleteCredentials(userId, serverName);
-        console.log(`Disconnected ${serverName} for user:`, userId);
+        console.log(`Deleted credentials for ${serverName}, user:`, userId);
       } catch (error: any) {
         console.error(`Error disconnecting ${serverName}:`, error.message);
         // Continue with other services even if one fails

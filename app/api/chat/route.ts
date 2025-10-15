@@ -15,6 +15,8 @@ export async function POST(request: NextRequest) {
   try {
     const { message, ga4Connected, gscConnected } = await request.json()
 
+    console.log('Chat request received:', message, ga4Connected, gscConnected)
+
     if (!message) {
       return NextResponse.json(
         { error: 'Message is required' },
@@ -37,7 +39,7 @@ export async function POST(request: NextRequest) {
     });
 
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    
+
     if (authError || !user) {
       return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
     }
@@ -60,16 +62,17 @@ export async function POST(request: NextRequest) {
     // Set up MCP connections for available services
     let allTools: any[] = [];
     const mcpClients: { [key: string]: any } = {};
-    
+
     // Connect to GA4 if available
     if (ga4Connected) {
       try {
         const credentials = await CredentialManager.getCredentials(userId, 'google-analytics');
-        
+        console.log('GA4 credentials: ', credentials)
+
         if (credentials) {
           const client = await mcpConnectionPool.getConnection(userId, 'google-analytics');
           const tools = await client.listTools();
-          
+
           // Add service prefix to tool names to avoid conflicts
           const ga4Tools = tools.map((tool: any) => ({
             ...tool,
@@ -78,7 +81,7 @@ export async function POST(request: NextRequest) {
             _originalName: tool.name,
             _service: 'google-analytics'
           }));
-          
+
           allTools = [...allTools, ...ga4Tools];
           mcpClients['google-analytics'] = client;
           console.log('Dynamically loaded GA4 tools:', tools.map((t: any) => t.name));
@@ -94,11 +97,11 @@ export async function POST(request: NextRequest) {
     if (gscConnected) {
       try {
         const credentials = await CredentialManager.getCredentials(userId, 'google-search-console');
-        
+
         if (credentials) {
           const client = await mcpConnectionPool.getConnection(userId, 'google-search-console');
           const tools = await client.listTools();
-          
+
           // Add service prefix to tool names to avoid conflicts
           const gscTools = tools.map((tool: any) => ({
             ...tool,
@@ -107,7 +110,7 @@ export async function POST(request: NextRequest) {
             _originalName: tool.name,
             _service: 'google-search-console'
           }));
-          
+
           allTools = [...allTools, ...gscTools];
           mcpClients['google-search-console'] = client;
           console.log('Dynamically loaded GSC tools:', tools.map((t: any) => t.name));
@@ -119,20 +122,22 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    console.log('All tools: ', allTools.map(tool => tool.name))
+    
     // Create system message with service context
     let systemContent = 'You are a helpful assistant.';
     const connectedServices: string[] = [];
-    
+
     if (ga4Connected && mcpClients['google-analytics']) {
       connectedServices.push('Google Analytics 4');
     }
     if (gscConnected && mcpClients['google-search-console']) {
       connectedServices.push('Google Search Console');
     }
-    
+
     if (connectedServices.length > 0) {
       systemContent += `\n\nYou have access to data from the following services: ${connectedServices.join(' and ')}. Use the available tools to answer questions with specific, accurate information from these services.`;
-      
+
       if (connectedServices.length > 1) {
         systemContent += `\n\nWhen answering questions, you can combine data from multiple services to provide comprehensive insights.`;
       }
@@ -231,7 +236,7 @@ export async function POST(request: NextRequest) {
 
         } catch (error: any) {
           console.error(`Error calling tool ${functionName}:`, error);
-          
+
           // Add error message to conversation
           messages.push({
             role: 'function',
@@ -249,7 +254,7 @@ export async function POST(request: NextRequest) {
       // If we hit max iterations without a final answer
       if (iteration >= MAX_ITERATIONS && !finalResponse) {
         console.warn('Max iterations reached, forcing final response');
-        
+
         // Ask LLM to provide final answer with what it has
         messages.push({
           role: 'system',

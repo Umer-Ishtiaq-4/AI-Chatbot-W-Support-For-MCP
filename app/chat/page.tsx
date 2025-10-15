@@ -23,6 +23,7 @@ export default function Chat() {
   const [gscConnected, setGscConnected] = useState(false)
   const [connectingGA4, setConnectingGA4] = useState(false)
   const [connectingGSC, setConnectingGSC] = useState(false)
+  const [checkingConnections, setCheckingConnections] = useState(false)
   const [showConnectionsMenu, setShowConnectionsMenu] = useState(false)
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null)
   const [confirmModal, setConfirmModal] = useState<{
@@ -58,6 +59,90 @@ export default function Chat() {
     checkUser()
   }, [router])
 
+  // Check connection status once per session
+  useEffect(() => {
+    if (!userId) return
+
+    const checkConnectionStatus = async () => {
+      // Check if we've already verified connections this session
+      const sessionKey = `connections_checked_${userId}`
+      const alreadyChecked = sessionStorage.getItem(sessionKey)
+
+      if (alreadyChecked) {
+        // Already checked this session, use localStorage for immediate feedback
+        const ga4IsConnected = localStorage.getItem('ga4_connected') === 'true'
+        const gscIsConnected = localStorage.getItem('gsc_connected') === 'true'
+        setGa4Connected(ga4IsConnected)
+        setGscConnected(gscIsConnected)
+        return
+      }
+
+      // First time this session - verify with backend
+      setCheckingConnections(true)
+
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session) {
+          throw new Error('Session expired')
+        }
+
+        const response = await fetch('/api/connections/status', {
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`
+          }
+        })
+
+        if (!response.ok) {
+          throw new Error('Failed to check connection status')
+        }
+
+        const data = await response.json()
+
+        // Update state based on actual backend status
+        const ga4IsConnected = data.ga4?.connected || false
+        const gscIsConnected = data.gsc?.connected || false
+
+        setGa4Connected(ga4IsConnected)
+        setGscConnected(gscIsConnected)
+
+        // Sync with localStorage
+        if (ga4IsConnected) {
+          localStorage.setItem('ga4_connected', 'true')
+        } else {
+          localStorage.removeItem('ga4_connected')
+        }
+
+        if (gscIsConnected) {
+          localStorage.setItem('gsc_connected', 'true')
+        } else {
+          localStorage.removeItem('gsc_connected')
+        }
+
+        // Mark as checked for this session
+        sessionStorage.setItem(sessionKey, 'true')
+
+        // Show any errors
+        if (data.ga4?.error && !ga4IsConnected) {
+          console.warn('GA4 connection issue:', data.ga4.error)
+        }
+        if (data.gsc?.error && !gscIsConnected) {
+          console.warn('GSC connection issue:', data.gsc.error)
+        }
+      } catch (error: any) {
+        console.error('Error checking connection status:', error)
+        // On error, fallback to localStorage values
+        const ga4IsConnected = localStorage.getItem('ga4_connected') === 'true'
+        const gscIsConnected = localStorage.getItem('gsc_connected') === 'true'
+        setGa4Connected(ga4IsConnected)
+        setGscConnected(gscIsConnected)
+      } finally {
+        setCheckingConnections(false)
+      }
+    }
+
+    checkConnectionStatus()
+  }, [userId])
+
   // Listen for OAuth messages from popup
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
@@ -91,6 +176,11 @@ export default function Chat() {
           }
         }
         
+        // Invalidate session cache so it re-checks on next page load
+        if (userId) {
+          sessionStorage.removeItem(`connections_checked_${userId}`)
+        }
+        
         setConnectingGA4(false)
         setConnectingGSC(false)
       }
@@ -98,20 +188,8 @@ export default function Chat() {
 
     window.addEventListener('message', handleMessage)
     return () => window.removeEventListener('message', handleMessage)
-  }, [])
+  }, [userId])
 
-  // Check for existing connections on mount
-  useEffect(() => {
-    const ga4IsConnected = localStorage.getItem('ga4_connected') === 'true'
-    const gscIsConnected = localStorage.getItem('gsc_connected') === 'true'
-    
-    if (ga4IsConnected) {
-      setGa4Connected(true)
-    }
-    if (gscIsConnected) {
-      setGscConnected(true)
-    }
-  }, [])
 
   // Close connections menu when clicking outside
   useEffect(() => {
@@ -397,6 +475,9 @@ export default function Chat() {
           // Update state
           setGa4Connected(false)
           localStorage.removeItem('ga4_connected')
+          
+          // Invalidate session cache to force re-check on next page load
+          sessionStorage.removeItem(`connections_checked_${userId}`)
 
           // Show success toast
           setToast({
@@ -452,6 +533,9 @@ export default function Chat() {
           // Update state
           setGscConnected(false)
           localStorage.removeItem('gsc_connected')
+          
+          // Invalidate session cache to force re-check on next page load
+          sessionStorage.removeItem(`connections_checked_${userId}`)
 
           // Show success toast
           setToast({
@@ -485,20 +569,36 @@ export default function Chat() {
             {/* Connection Status Indicators */}
             <div className="flex items-center space-x-2 ml-6">
               <div className={`flex items-center px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
-                ga4Connected 
+                checkingConnections
+                  ? 'bg-yellow-500/20 text-yellow-100 border border-yellow-400/30'
+                  : ga4Connected 
                   ? 'bg-green-500/20 text-green-100 border border-green-400/30' 
                   : 'bg-white/10 text-white/60 border border-white/20'
               }`}>
-                <div className={`w-2 h-2 rounded-full mr-2 ${ga4Connected ? 'bg-green-400 animate-pulse' : 'bg-white/40'}`}></div>
-                GA4
+                <div className={`w-2 h-2 rounded-full mr-2 ${
+                  checkingConnections 
+                    ? 'bg-yellow-400 animate-pulse' 
+                    : ga4Connected 
+                    ? 'bg-green-400 animate-pulse' 
+                    : 'bg-white/40'
+                }`}></div>
+                {checkingConnections ? 'Checking...' : 'GA4'}
               </div>
               <div className={`flex items-center px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
-                gscConnected 
+                checkingConnections
+                  ? 'bg-yellow-500/20 text-yellow-100 border border-yellow-400/30'
+                  : gscConnected 
                   ? 'bg-green-500/20 text-green-100 border border-green-400/30' 
                   : 'bg-white/10 text-white/60 border border-white/20'
               }`}>
-                <div className={`w-2 h-2 rounded-full mr-2 ${gscConnected ? 'bg-green-400 animate-pulse' : 'bg-white/40'}`}></div>
-                GSC
+                <div className={`w-2 h-2 rounded-full mr-2 ${
+                  checkingConnections 
+                    ? 'bg-yellow-400 animate-pulse' 
+                    : gscConnected 
+                    ? 'bg-green-400 animate-pulse' 
+                    : 'bg-white/40'
+                }`}></div>
+                {checkingConnections ? 'Checking...' : 'GSC'}
               </div>
             </div>
           </div>
