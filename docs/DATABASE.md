@@ -593,3 +593,4 @@ COMMIT; -- or ROLLBACK;
 - [Row Level Security Guide](https://supabase.com/docs/guides/auth/row-level-security)
 - [Database Schema](../database/schema.sql)
 
+
