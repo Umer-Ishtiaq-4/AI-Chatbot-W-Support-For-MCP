@@ -11,7 +11,7 @@
     "build": "next build",
     "start": "next start -p ${PORT:-3000}",
     "lint": "next lint",
-    "postinstall": "command -v pipx >/dev/null 2>&1 && pipx install analytics-mcp || echo 'pipx not found, skipping analytics-mcp installation'"
+    "postinstall": "if [ -z \"$RAILWAY_ENVIRONMENT\" ]; then command -v pipx >/dev/null 2>&1 && pipx install analytics-mcp || echo 'pipx not found, skipping analytics-mcp installation'; fi"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.19.1",
