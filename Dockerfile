@@ -22,8 +22,7 @@ WORKDIR /app
 FROM base AS deps
 
 COPY package.json package-lock.json* ./
-RUN --mount=type=cache,target=/root/.npm \
-  npm ci
+RUN npm ci
 
 # Install GA4 analytics-mcp via pipx in the image so runtime can exec it
 RUN pipx install analytics-mcp
