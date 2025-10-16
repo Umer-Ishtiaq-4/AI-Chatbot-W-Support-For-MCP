@@ -32,23 +32,9 @@ export class GoogleAnalyticsMCPClient implements MCPServerInterface {
       console.log('Starting GA4 MCP server with persistent credentials:', credentialsPath);
 
       // Connect to the Python MCP server via stdio
-      // Try multiple possible paths for analytics-mcp (Railway, local, etc.)
-      const possibleCommands = [
-        'analytics-mcp',           // In PATH
-        '/app/.local/bin/analytics-mcp',  // Railway pipx install location
-        process.env.HOME ? `${process.env.HOME}/.local/bin/analytics-mcp` : null,  // User home
-      ].filter(Boolean);
-
-      let command = possibleCommands[0];
-      
-      // On Railway, use explicit path
-      if (process.env.RAILWAY_ENVIRONMENT) {
-        command = '/app/.local/bin/analytics-mcp';
-        console.log('Railway environment detected, using explicit path:', command);
-      }
-
+      // Use 'analytics-mcp' which should be in PATH (installed via Dockerfile or local setup)
       this.transport = new StdioClientTransport({
-        command: command!,
+        command: 'analytics-mcp',
         args: [],
         env
       });
