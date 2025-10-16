@@ -10,8 +10,7 @@ RUN apt-get update -y \
 
 ENV PNPM_HOME="/pnpm" \
     PATH="/pnpm:/root/.local/bin:${PATH}" \
-    NEXT_TELEMETRY_DISABLED=1 \
-    NODE_ENV=production
+    NEXT_TELEMETRY_DISABLED=1
 
 WORKDIR /app
 
