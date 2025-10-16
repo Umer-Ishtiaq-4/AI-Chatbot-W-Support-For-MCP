@@ -1,14 +1,11 @@
 # syntax=docker/dockerfile:1
 
 # ---------- Base dependencies ----------
-FROM node:20-bullseye AS base
+FROM node:20-bookworm AS base
 
-# Install Python and pipx for GA4 MCP server (analytics-mcp)
+# Install Python 3 and pip for GA4 MCP server (analytics-mcp)
 RUN apt-get update -y \
-  && apt-get install -y --no-install-recommends python3 python3-pip python3-venv python3-distutils python3-full \
-  && python3 -m pip install --upgrade pip \
-  && python3 -m pip install pipx \
-  && python3 -m pipx ensurepath \
+  && apt-get install -y --no-install-recommends python3 python3-pip \
   && rm -rf /var/lib/apt/lists/*
 
 ENV PNPM_HOME="/pnpm" \
@@ -25,7 +22,9 @@ COPY package.json package-lock.json* ./
 RUN npm ci
 
 # Install GA4 analytics-mcp via pipx in the image so runtime can exec it
-RUN pipx install analytics-mcp
+RUN python3 -m pip install --no-cache-dir --upgrade pip \
+  && python3 -m pip install --no-cache-dir pipx \
+  && pipx install analytics-mcp
 
 # ---------- Build ----------
 FROM base AS build
@@ -37,9 +36,10 @@ COPY . .
 RUN npm run build
 
 # ---------- Runtime (minimal) ----------
-FROM node:20-bullseye AS runner
+FROM node:20-bookworm AS runner
 ENV NODE_ENV=production \
-    NEXT_TELEMETRY_DISABLED=1
+    NEXT_TELEMETRY_DISABLED=1 \
+    PATH="/root/.local/bin:${PATH}"
 
 WORKDIR /app
 
