@@ -24,7 +24,7 @@ RUN npm ci
 # Install GA4 analytics-mcp via pipx in the image so runtime can exec it
 RUN python3 -m pip install --no-cache-dir --upgrade pip \
   && python3 -m pip install --no-cache-dir pipx \
-  && pipx install analytics-mcp
+  && pipx run analytics-mcp
 
 # ---------- Build ----------
 FROM base AS build
