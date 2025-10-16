@@ -58,6 +58,7 @@ export async function POST(request: NextRequest) {
 
     // Reverse to get chronological order (oldest to newest)
     const conversationHistory = (recentMessages || []).reverse();
+    console.log('Conversation history: ', conversationHistory)
 
     // Set up MCP connections for available services
     let allTools: any[] = [];

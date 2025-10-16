@@ -57,11 +57,14 @@ export class CredentialManager {
       refresh_token: tokens.refresh_token,
       ...(tokens.access_token && { access_token: tokens.access_token })
     };
-
+    
     // Write credentials file with restricted permissions
     fs.writeFileSync(credentialsPath, JSON.stringify(credentialsData, null, 2), {
       mode: 0o600 // Only owner can read/write
     });
+
+    console.log("Writing credentials to file: ", credentialsPath);
+    console.log("Credentials Expiry Date: ", tokens.expiry_date);
 
     // Store in database
     const { data, error } = await supabase
