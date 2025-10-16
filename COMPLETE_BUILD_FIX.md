@@ -2,7 +2,7 @@
 
 ## Summary of All Fixes
 
-Railway Docker build was failing with Supabase initialization errors during `npm run build`. This required **two separate fixes**.
+Railway Docker build was failing with initialization errors during `npm run build`. This required **three separate fixes** to handle module-level initialization of external clients.
 
 ---
 
@@ -89,6 +89,68 @@ export const supabase = new Proxy({} as SupabaseClient, {
 
 ---
 
+## Fix 3: Lazy-Load OpenAI Client ✅
+
+### Problem
+Similar to Supabase, the OpenAI client in `app/api/chat/route.ts` was being created at module import time:
+
+```typescript
+// ❌ BAD: Executes during build
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+})
+```
+
+This fails during Docker build because `OPENAI_API_KEY` isn't available.
+
+### Solution
+Changed to **lazy initialization** with a getter function:
+
+**File Modified:** `app/api/chat/route.ts`
+
+**New Code:**
+```typescript
+// Lazy-load OpenAI client
+let openaiInstance: OpenAI | null = null;
+
+function getOpenAIClient() {
+  if (!openaiInstance) {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      throw new Error('OPENAI_API_KEY environment variable is required');
+    }
+    openaiInstance = new OpenAI({ apiKey });
+  }
+  return openaiInstance;
+}
+
+// Also made Supabase config lazy in this file
+function getSupabaseConfig() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  
+  if (!supabaseUrl || !supabaseServiceKey) {
+    throw new Error('Supabase environment variables are required');
+  }
+  
+  return { supabaseUrl, supabaseServiceKey };
+}
+```
+
+**Updated All Usages:**
+```typescript
+// Before: openai.chat.completions.create(...)
+// After:  getOpenAIClient().chat.completions.create(...)
+
+// Before: createClient(supabaseUrl, supabaseServiceKey, ...)
+// After:  const { supabaseUrl, supabaseServiceKey } = getSupabaseConfig();
+//         createClient(supabaseUrl, supabaseServiceKey, ...)
+```
+
+**Why:** Delays OpenAI client creation until runtime when env vars are available.
+
+---
+
 ## Timeline of the Issue
 
 ```
@@ -98,8 +160,11 @@ export const supabase = new Proxy({} as SupabaseClient, {
 2. Build failed: supabaseUrl required during npm build
    └─> Fixed with dynamic API routes
 
-3. Still failing: supabase.ts module-level initialization
+3. Still failing: lib/supabase.ts module-level initialization
    └─> Fixed with lazy-loading Proxy
+
+4. Still failing: OpenAI client module-level initialization
+   └─> Fixed with lazy-loading getter function
 ```
 
 ---
@@ -206,12 +271,12 @@ Runtime (Container Start)
 
 ## Files Changed Summary
 
-### Modified (5 API routes):
+### Modified (5 API routes + dynamic export):
 - `app/api/auth/google/route.ts` - Added dynamic export
 - `app/api/auth/google/callback/route.ts` - Added dynamic export
 - `app/api/auth/google/disconnect/route.ts` - Added dynamic export
 - `app/api/connections/status/route.ts` - Added dynamic export
-- `app/api/chat/route.ts` - Added dynamic export
+- `app/api/chat/route.ts` - Added dynamic export + lazy OpenAI + lazy Supabase config
 
 ### Modified (1 core lib):
 - `lib/supabase.ts` - Lazy-load with Proxy
@@ -219,7 +284,8 @@ Runtime (Container Start)
 ### No breaking changes:
 - All existing code continues to work
 - `supabase.auth.getSession()` works exactly as before
-- Just happens lazily now
+- `openai.chat.completions.create()` works exactly as before
+- Client creation just happens lazily at runtime now
 
 ---
 
@@ -257,7 +323,13 @@ const something = process.env.VAR!  // At top of file
 
 ✅ **All fixes applied and ready to deploy!**
 
-The combination of dynamic API routes + lazy Supabase initialization solves the build issue completely.
+The combination of:
+1. Dynamic API routes
+2. Lazy Supabase client (Proxy pattern)
+3. Lazy OpenAI client (getter function)
+4. Lazy Supabase config in chat route
+
+...solves all build issues completely.
 
 **Next step:** Commit and push to trigger Railway deployment.
 

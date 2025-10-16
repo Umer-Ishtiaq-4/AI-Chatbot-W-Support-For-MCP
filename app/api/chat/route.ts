@@ -7,12 +7,31 @@ import { createClient } from '@supabase/supabase-js'
 // Force dynamic rendering
 export const dynamic = 'force-dynamic';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-})
+// Lazy-load OpenAI client to avoid requiring env vars at build time
+let openaiInstance: OpenAI | null = null;
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+function getOpenAIClient() {
+  if (!openaiInstance) {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      throw new Error('OPENAI_API_KEY environment variable is required');
+    }
+    openaiInstance = new OpenAI({ apiKey });
+  }
+  return openaiInstance;
+}
+
+// Lazy-load Supabase credentials (validated at runtime)
+function getSupabaseConfig() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  
+  if (!supabaseUrl || !supabaseServiceKey) {
+    throw new Error('Supabase environment variables are required');
+  }
+  
+  return { supabaseUrl, supabaseServiceKey };
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -34,6 +53,7 @@ export async function POST(request: NextRequest) {
     }
 
     const token = authHeader.split(' ')[1];
+    const { supabaseUrl, supabaseServiceKey } = getSupabaseConfig();
     const supabase = createClient(supabaseUrl, supabaseServiceKey, {
       auth: {
         autoRefreshToken: false,
@@ -181,7 +201,7 @@ export async function POST(request: NextRequest) {
         iteration++;
         console.log(`\n=== Agent Iteration ${iteration} ===`);
 
-        const completion = await openai.chat.completions.create({
+        const completion = await getOpenAIClient().chat.completions.create({
           model: 'gpt-4o',
           messages: messages,
           functions,
@@ -264,7 +284,7 @@ export async function POST(request: NextRequest) {
           content: 'Please provide a final answer based on the information gathered so far.'
         });
 
-        const finalCompletion = await openai.chat.completions.create({
+        const finalCompletion = await getOpenAIClient().chat.completions.create({
           model: 'gpt-4o',
           messages: messages,
         });
@@ -276,7 +296,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Regular completion without function calling (no GA4 tools available)
-    const completion = await openai.chat.completions.create({
+    const completion = await getOpenAIClient().chat.completions.create({
       model: 'gpt-4o',
       messages: messages,
     })
