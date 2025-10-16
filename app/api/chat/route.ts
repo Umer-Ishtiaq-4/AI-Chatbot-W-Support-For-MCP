@@ -4,6 +4,9 @@ import { mcpConnectionPool } from '@/lib/mcp/connection-pool'
 import { CredentialManager } from '@/lib/mcp/credential-manager'
 import { createClient } from '@supabase/supabase-js'
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic';
+
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 })
