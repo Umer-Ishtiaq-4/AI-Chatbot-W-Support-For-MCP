@@ -1,5 +1,6 @@
 // Google OAuth Callback Route
 import { NextRequest, NextResponse } from 'next/server';
+export const dynamic = 'force-dynamic'
 import { getGoogleTokens } from '@/lib/auth/google';
 import { CredentialManager } from '@/lib/mcp/credential-manager';
 

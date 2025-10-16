@@ -1,5 +1,6 @@
 // Google OAuth Authentication Route
 import { NextRequest, NextResponse } from 'next/server';
+export const dynamic = 'force-dynamic'
 import { getGoogleAuthUrl } from '@/lib/auth/google';
 import { supabase } from '@/lib/supabase';
 
