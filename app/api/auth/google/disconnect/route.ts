@@ -4,6 +4,9 @@ import { CredentialManager } from '@/lib/mcp/credential-manager';
 import { mcpConnectionPool } from '@/lib/mcp/connection-pool';
 import { createClient } from '@supabase/supabase-js';
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic';
+
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 

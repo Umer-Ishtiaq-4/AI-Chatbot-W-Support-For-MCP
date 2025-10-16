@@ -1,0 +1,25 @@
+# Railway Nixpacks Configuration
+# This file tells Railway how to build and run the application
+
+[phases.setup]
+# Install system dependencies: Node.js 20, Python 3.11, and pipx
+nixPkgs = ['nodejs_20', 'python311', 'python311Packages.pip', 'pipx']
+
+[phases.install]
+# Install Node.js dependencies and Python MCP server
+cmds = [
+  'npm ci',
+  'mkdir -p /app/.local/bin',
+  'PIPX_HOME=/app/.pipx PIPX_BIN_DIR=/app/.local/bin pipx install analytics-mcp',
+  '/app/.local/bin/analytics-mcp --version || echo "analytics-mcp not found in /app/.local/bin"',
+  'ls -la /app/.local/bin || echo "Directory does not exist"'
+]
+
+[phases.build]
+# Build Next.js application
+cmds = ['npm run build']
+
+[start]
+# Start the production server with PATH set
+cmd = 'PATH=/app/.local/bin:$PATH npm start'
+

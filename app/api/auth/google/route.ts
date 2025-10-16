@@ -3,6 +3,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getGoogleAuthUrl } from '@/lib/auth/google';
 import { supabase } from '@/lib/supabase';
 
+// Force dynamic rendering - don't try to build statically
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     // Get the user session

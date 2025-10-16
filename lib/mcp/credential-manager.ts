@@ -19,12 +19,20 @@ export interface MCPCredentials {
 }
 
 export class CredentialManager {
-  private static credentialsDir = path.join(process.cwd(), 'mcp-credentials');
+  // Use Railway-safe path: /app is writable on Railway, /tmp on Vercel (won't work with MCP)
+  private static credentialsDir = process.env.RAILWAY_ENVIRONMENT
+    ? path.join('/app', 'mcp-credentials')
+    : process.env.VERCEL
+    ? path.join('/tmp', 'mcp-credentials')
+    : path.join(process.cwd(), 'mcp-credentials');
 
   static {
     // Ensure credentials directory exists on startup
     if (!fs.existsSync(this.credentialsDir)) {
       fs.mkdirSync(this.credentialsDir, { recursive: true, mode: 0o700 });
+      console.log(`Created credentials directory at: ${this.credentialsDir}`);
+    } else {
+      console.log(`Using credentials directory: ${this.credentialsDir}`);
     }
   }
 

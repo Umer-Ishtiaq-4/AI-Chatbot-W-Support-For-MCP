@@ -32,7 +32,7 @@ export class GoogleAnalyticsMCPClient implements MCPServerInterface {
       console.log('Starting GA4 MCP server with persistent credentials:', credentialsPath);
 
       // Connect to the Python MCP server via stdio
-      // Use the installed executable directly to avoid Windows issues
+      // Use 'analytics-mcp' which should be in PATH (installed via Dockerfile or local setup)
       this.transport = new StdioClientTransport({
         command: 'analytics-mcp',
         args: [],
