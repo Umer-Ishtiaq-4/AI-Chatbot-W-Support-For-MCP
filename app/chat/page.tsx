@@ -364,6 +364,7 @@ export default function Chat() {
       })
 
       const data = await response.json()
+      console.log('GA4 OAuth URL:', data.authUrl);
       
       if (!response.ok) {
         throw new Error(data.error || 'Failed to get auth URL')
@@ -647,7 +648,10 @@ export default function Chat() {
                         </button>
                       ) : (
                         <button
-                          onClick={() => { setShowConnectionsMenu(false); connectGA4(); }}
+                          onClick={() => { 
+                            setShowConnectionsMenu(false); 
+                            connectGA4(); 
+                          }}
                           disabled={connectingGA4}
                           className="px-3 py-1.5 bg-gradient-to-r from-blue-500 to-indigo-600 text-white text-xs font-medium rounded hover:shadow-md transition-all disabled:opacity-50"
                         >

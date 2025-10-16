@@ -1,0 +1,28 @@
+# Node / Next.js
+node_modules
+.next
+npm-debug.log
+.yarn/cache
+.pnpm-store
+
+# Env files
+.env
+.env.*
+!.env.example
+
+# OS / editor
+.DS_Store
+*.swp
+*.swo
+.idea
+.vscode
+
+# Build outputs
+out
+coverage
+
+# Next cache
+.next/cache
+
+# Local credentials (provide via Railway variables or mounted storage)
+mcp-credentials

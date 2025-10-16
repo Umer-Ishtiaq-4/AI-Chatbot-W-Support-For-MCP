@@ -30,6 +30,12 @@ export async function GET(request: NextRequest) {
     })).toString('base64');
 
     const authUrl = getGoogleAuthUrl(state, service);
+    console.log("/Google Auth URL route");
+    console.log('Auth URL:', authUrl.slice(0, 10));
+    console.log('Service:', service);
+    console.log('User ID:', user.id);
+    console.log('Timestamp:', Date.now());
+    console.log('State:', state);
 
     return NextResponse.json({ authUrl });
   } catch (error: any) {
